@@ -1,0 +1,27 @@
+From f5d83c598d5f3091fbcb9d8a150a719fc8977caa Mon Sep 17 00:00:00 2001
+From: Kieran Frewen <kieran.frewen@morsemicro.com>
+Date: Thu, 28 Jul 2022 02:24:46 +0000
+Subject: [PATCH] MOR-250 - DPP
+
+---
+ net/mac80211/rx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/net/mac80211/rx.c b/net/mac80211/rx.c
+index 2a5a11f92b03..f527e9784683 100644
+--- a/net/mac80211/rx.c
++++ b/net/mac80211/rx.c
+@@ -3974,8 +3974,10 @@ static bool ieee80211_accept_frame(struct ieee80211_rx_data *rx)
+ 	case NL80211_IFTYPE_STATION:
+ 		if (!bssid && !sdata->u.mgd.use_4addr)
+ 			return false;
++#if 0
+ 		if (ieee80211_is_robust_mgmt_frame(skb) && !rx->sta)
+ 			return false;
++#endif
+ 		if (multicast)
+ 			return true;
+ 		return ether_addr_equal(sdata->vif.addr, hdr->addr1);
+-- 
+2.25.1
+

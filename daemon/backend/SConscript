@@ -1,0 +1,23 @@
+Import('env')
+
+incs = ['.', 'wpa_ctrl', 'wpa_ctrl/utils', "/usr/include/libnl3"]
+
+env.Append(CPPPATH=list(map(lambda x: Dir(x).srcnode(), incs)))
+
+env.Append(CPPDEFINES=[
+    "CONFIG_CTRL_IFACE_UNIX", "CONFIG_CTRL_IFACE",
+])
+
+env.Append(LIBS=['nl-3', 'nl-genl-3'])
+
+style_srcs = env.Glob('*.c')
+srcs = RecursiveGlob('wpa_ctrl/', '*.c') + style_srcs
+objs = env.Object(srcs)
+
+data = {
+    'srcs': srcs,
+    'objs': objs,
+    'style': style_srcs,
+}
+
+Return(['data'])
