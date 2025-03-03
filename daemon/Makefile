@@ -1,27 +1,51 @@
+#
+# Copyright 2023 - 2024 Morse Micro
+#
+
 CC = gcc
-CFLAGS  ?= -g -Wall -Werror -I/usr/include/libnl3 -Iinclude -I. -Ibackend/wpa_ctrl/utils -Ibackend/wpa_ctrl -DHOSTAPD -DHOSTAPD_DUMP_STATE -DCONFIG_CTRL_IFACE_UNIX -DCONFIG_CTRL_IFACE -DCONFIG_RSN_PREAUTH  -DCONFIG_DRIVER_HOSTAP  -DCONFIG_DRIVER_NL80211 -DCONFIG_ERP -DEAP_SERVER_MD5 -DEAP_SERVER_TLS -DEAP_SERVER_PEAP -DEAP_SERVER_TTLS -DEAP_SERVER_MSCHAPV2 -DEAP_SERVER_GTC -DEAP_SERVER_IDENTITY -DEAP_SERVER -DPKCS12_FUNCS -DEAP_TLS_FUNCS -DTLS_DEFAULT_CIPHERS=\""DEFAULT:!EXP:!LOW"\" -DCONFIG_DES -DCONFIG_SHA256 -DCONFIG_IPV6 -DNEED_AP_MLME
-LIBS ?= -lpthread -lnl-3 -lnl-genl-3 -lm -lmicrohttpd -lssl -lcrypto -lavahi-core -lavahi-common
+
+CFLAGS += -g -Wall -Werror -Iinclude -I.
+LIBS += -lpthread -lm -lmicrohttpd -lssl -lcrypto -lavahi-core -lavahi-common -lwpa_client_s1g
 
 NAME = dppd
 
+# ARCH is expected to be passed on the command line. No default is required.
+
+BUILD_DIR = build
+TARGET_DIR = $(BUILD_DIR)/$(ARCH)
+OUTPUT = $(TARGET_DIR)/$(NAME)
+
 SRC_DIR = .
-OUTPUT_DIR = build
-
-OUTPUT = $(OUTPUT_DIR)/$(NAME)
-
 SRCS = $(shell find $(SRC_DIR)/ -name \*.c)
-OBJS = $(patsubst $(SRC_DIR)/%.c, $(OUTPUT_DIR)/%.o, $(SRCS))
+OBJS = $(patsubst $(SRC_DIR)/%.c, $(TARGET_DIR)/%.o, $(SRCS))
 
-default: $(OUTPUT)
+# Build "all" by default
+all: $(OUTPUT)
 
+# Build verbosity, quiet by default.
+V ?= 0
+ECHO = echo
+
+ifeq ($(V),0)
+Q = @
+QQ = @
+else
+QQ = @:
+endif
+
+# Compile and link
 $(OUTPUT): $(OBJS)
-	mkdir -p $(OUTPUT_DIR)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
+	$(QQ) $(ECHO) Linking $@
+	$(Q) mkdir -p $(dir $@)
+	$(Q) $(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
 
-$(OUTPUT_DIR)/%.o: $(SRC_DIR)/%.c
-	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+$(TARGET_DIR)/%.o: $(SRC_DIR)/%.c
+	$(QQ) $(ECHO) Compiling $@ ...
+	$(Q) mkdir -p $(dir $@)
+	$(Q) $(CC) $(CFLAGS) -c -o $@ $<
 
 clean:
-	$(RM) $(OBJS) $(OUTPUT)
-	$(RM) -rf $(OUTPUT_DIR)
+	$(RM) -rf $(TARGET_DIR)
+
+distclean:
+	$(RM) -rf $(BUILD_DIR)

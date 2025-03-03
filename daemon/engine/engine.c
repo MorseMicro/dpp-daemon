@@ -143,6 +143,7 @@ mmsm_internal_request(mmsm_backend_intf_t *intf,
         mmsm_error_code err = intf->req_blocking(intf, command, &rsp);
         if (err != mmsm_success)
         {
+            mmsm_data_item_free(rsp);
             LOG_ERROR("req_blocking failed: %d\n", err);
             return NULL;
         }

@@ -1,8 +1,9 @@
 /*
- * Copyright 2022 Morse Micro
+ * Copyright 2022-2024 Morse Micro
  *
  * SPDX-License-Identifier: GPL-2.0-or-later OR LicenseRef-MorseMicroCommercial
  */
+
 #include <pthread.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -13,7 +14,8 @@
 
 #include <sys/socket.h>
 
-#include "wpa_ctrl/common/wpa_ctrl.h"
+#include <wpa_ctrl.h>
+
 #include "backend.h"
 
 #include "utils.h"

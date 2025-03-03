@@ -1,8 +1,9 @@
 /*
- * Copyright 2022 Morse Micro
+ * Copyright 2022-2024 Morse Micro
  *
  * SPDX-License-Identifier: GPL-2.0-or-later OR LicenseRef-MorseMicroCommercial
  */
+
 /**
  * The main DDP daemon
  */
@@ -373,6 +374,7 @@ hostapd_init_sequence(mmsm_backend_intf_t *hostapd,
     field = mmsm_find_value_by_key(result, "ssid[0]");
     if (sizeof(ap_ssid) < strlen((char*)field))
     {
+        mmsm_data_item_free(result);
         return DPP_ERROR_CODE_OVERFLOW_ERROR;
     }
     strcpy(ap_ssid, (char*)field);
