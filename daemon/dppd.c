@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <inttypes.h>
 #include <getopt.h>
+#include <sys/stat.h>
 
 #include "dpp_mdns.h"
 #include "dpp_httpd.h"
@@ -97,6 +98,7 @@ static bool debug_mode = false;
 static char *qrcode = NULL;
 static char configurator_id = 1;
 static char *dpp_conn_key, *dpp_csign, *dpp_netaccesskey;
+static char *ctrl_if_path = NULL;
 
 
 void
@@ -111,73 +113,11 @@ cleanups()
 }
 
 
-static char *
-find_ctrl_if_path()
+static int
+ctrl_if_path_available()
 {
-    bool found = false;
-    char path[50] = "/var/run/";
-    DIR *root_dir = opendir(path);
-    struct dirent *dir_data;
-    char *cif_path = NULL;
-
-    if (root_dir)
-    {
-        while ((dir_data = readdir(root_dir)) != NULL)
-        {
-            if (strstr(dir_data->d_name, "hostapd"))
-            {
-
-                if (found)
-                {
-                    LOG_INFO("Conflict: more than a single path containing"
-                             " 'Hostapd' exists, please select manually"
-                             " (use argument -i)\n");
-                    closedir(root_dir);
-                    return NULL;
-                }
-                snprintf(path + strlen(path), sizeof(path) - strlen(path),
-                         "%s/", dir_data->d_name);
-                found = true;
-            }
-        }
-        closedir(root_dir);
-
-        if (!found)
-            return NULL;
-
-        root_dir = opendir(path);
-        if (root_dir)
-        {
-            int counter = 0;
-            while ((dir_data = readdir(root_dir)) != NULL)
-            {
-                counter++;
-                if (strcmp(dir_data->d_name, ".") &&
-                    strcmp(dir_data->d_name, ".."))
-                    snprintf(path + strlen(path), sizeof(path) - strlen(path),
-                             "%s", dir_data->d_name);
-            }
-            if (counter > 3)
-            {
-                LOG_INFO("Conflict: more than a single path containing"
-                         " 'Hostapd' exists, please select manually"
-                         " (use argument -i)\n");
-                closedir(root_dir);
-                return NULL;
-            }
-            else if (counter < 3)
-            {
-                LOG_INFO("File is missing: 'Hostapd' folder found (%s), but"
-                         " no file could be located\n", path);
-                closedir(root_dir);
-                return NULL;
-            }
-            cif_path = strdup(path);
-            closedir(root_dir);
-            return cif_path;
-        }
-    }
-    return NULL;
+    struct stat buf;
+    return (stat(ctrl_if_path, &buf) == 0);
 }
 
 
@@ -186,9 +126,7 @@ polling_hostapd_thread_fn(void *arg)
 {
     while (1)
     {
-        char *ctrl_if_path = find_ctrl_if_path();
-
-        if (!ctrl_if_path)
+        if (!ctrl_if_path_available())
         {
             DPP_ASSERT(pthread_mutex_lock(&dpp_mutex) == 0);
             if (state > DPP_STATE_UNINIT)
@@ -210,8 +148,6 @@ polling_hostapd_thread_fn(void *arg)
             DPP_ASSERT(pthread_cond_signal(&dpp_cond) == 0);
             DPP_ASSERT(pthread_mutex_unlock(&dpp_mutex) == 0);
         }
-
-        free(ctrl_if_path);
 
         usleep(100000);
     }
@@ -651,8 +587,6 @@ main (int argc, char *const *argv)
     const char *tls_cert = "/etc/server.pem";
     const char *tls_key = "/etc/server.key";
     const char *http_secrets = "/etc/auth_secrets.txt";
-    char *ctrl_if = NULL;
-    char *ctrl_if_path = NULL;
     uint16_t httpd_port = 0;
     int prev_state = DPP_STATE_INVALID;
     const char *configurator_key = "/etc/key.pem";
@@ -751,6 +685,14 @@ main (int argc, char *const *argv)
         }
     }
 
+    if (ctrl_if_path == NULL)
+    {
+        ret = DPP_ERROR_CODE_ARGUMENTS_PARSING_ERROR;
+        LOG_ERROR("--ctrl-if-path/-i is required\n");
+        print_usage();
+        goto cleanup;
+    }
+
     /* Handle keys for persistence Hostapd process */
     if (!load_key(configurator_key, &key) ||
         !load_key(configurator_private_key, &ppkey))
@@ -765,17 +707,11 @@ main (int argc, char *const *argv)
 
     sscanf(port_number, "%" SCNu16, &httpd_port);
 
-    LOG_INFO("Try to Connect to Hostapd interface\n");
-
-    ctrl_if = find_ctrl_if_path();
-    if (!ctrl_if)
-        LOG_NP(LOG_ERROR, "Could not connect to Hostapd re-trying...\n");
-    while (!ctrl_if) {
+    while (!ctrl_if_path_available())
+    {
+        LOG_NP(LOG_ERROR, "hostapd control interface not available, re-trying...\n");
         sleep(1);
-        ctrl_if = find_ctrl_if_path();
     }
-    free(ctrl_if);
-    ctrl_if = NULL;
 
     LOG_NP(LOG_ERROR, "Connecting to Hostapd...\n");
     /* coverity[missing_lock:SUPPRESS] */
@@ -804,22 +740,16 @@ main (int argc, char *const *argv)
         }
         else if (state == DPP_STATE_DISCONNECTED)
         {
-            if (!ctrl_if_path)
+            LOG_INFO("Try to Connect to Hostapd interface\n");
+
+            if (!ctrl_if_path_available())
             {
-                LOG_INFO("Looking for control interface path...\n");
-                ctrl_if_path = find_ctrl_if_path();
-                if(!ctrl_if_path)
-                {
-                    LOG_WARN("Conflicts when looking for control interface path...\n");
-                    goto mutex_unlock;
-                }
+                goto mutex_unlock;
             }
 
             /* If we cannot connect to Hostapd, do no change state */
             if ((hostapd = hostapd_reconnect(ctrl_if_path)) == NULL)
             {
-                free(ctrl_if_path);
-                ctrl_if_path = NULL;
                 goto mutex_unlock;
             }
 
